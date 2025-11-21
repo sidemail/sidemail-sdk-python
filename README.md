@@ -177,7 +177,7 @@ result.limit       # page size (if provided)
 result.offset      # offset (for offset-based endpoints)
 result.has_more    # whether more pages are available
 result.next_cursor # cursor (for cursor-based endpoints)
-result.prev_cursor
+result.prev_cursor # cursor (for cursor-based endpoints)
 ```
 
 Iterate over all pages automatically:
@@ -281,7 +281,7 @@ contact = sm.contacts.create_or_update(
 	email="user@example.com",
 	firstName="Jane",
 	lastName="Doe",
-	attributes={
+	customProps={
 		"plan": "pro",
 	},
 )
@@ -295,13 +295,13 @@ if contact is not None:
 	print(contact.email)
 ```
 
-### Query contacts (offset-based)
+### Query contacts
 
 ```python
 result = sm.contacts.query(
 	limit=100,
 	query={
-		"attributes.plan": "pro",
+		"customProps.plan": "pro",
 	},
 )
 
@@ -330,7 +330,7 @@ resp = sm.contacts.delete("user@example.com")
 
 Entry point: `sm.messenger`
 
-### List messengers (offset-based)
+### List messengers
 
 ```python
 result = sm.messenger.list(limit=20, offset=0)
