@@ -176,12 +176,12 @@ class QueryResult:
         first_page: Mapping[str, Any],
         *,
         data_key: str,
-        fetch_next,  # () -> (page or None, has_more: bool)
-        fetch_prev=None,  # () -> (page or None, has_prev: bool)
-        has_more: bool,
-        has_prev: bool = False,
-        next_cursor: Optional[str] = None,
-        prev_cursor: Optional[str] = None,
+        fetch_next,  # () -> (page or None, hasMore: bool)
+        fetch_prev=None,  # () -> (page or None, hasPrev: bool)
+        hasMore: bool,
+        hasPrev: bool = False,
+        paginationCursorNext: Optional[str] = None,
+        paginationCursorPrev: Optional[str] = None,
         offset: Optional[int] = None,
         limit: Optional[int] = None,
     ):
@@ -194,10 +194,10 @@ class QueryResult:
         self.total: Optional[int] = self.page.get("total")
         self.limit = limit
         self.offset = offset
-        self.next_cursor = next_cursor
-        self.prev_cursor = prev_cursor
-        self.has_more = bool(has_more)
-        self.has_prev = bool(has_prev)
+        self.paginationCursorNext = paginationCursorNext
+        self.paginationCursorPrev = paginationCursorPrev
+        self.hasMore = bool(hasMore)
+        self.hasPrev = bool(hasPrev)
 
     def __iter__(self) -> Iterator[Dict[str, Any]]:
         return iter(self.data)
@@ -205,8 +205,8 @@ class QueryResult:
     def auto_paging(self) -> Iterator[Dict[str, Any]]:
         for item in self.data:
             yield item
-        while self.has_more and self._fetch_next:
-            nxt, self.has_more = self._fetch_next()
+        while self.hasMore and self._fetch_next:
+            nxt, self.hasMore = self._fetch_next()
             if not isinstance(nxt, Mapping):
                 return
             items = nxt.get(self._data_key) or []
@@ -216,8 +216,8 @@ class QueryResult:
                 yield it
 
     def auto_paging_prev(self) -> Iterator[Dict[str, Any]]:
-        while self.has_prev and self._fetch_prev:
-            prv, self.has_prev = self._fetch_prev()
+        while self.hasPrev and self._fetch_prev:
+            prv, self.hasPrev = self._fetch_prev()
             if not isinstance(prv, Mapping):
                 return
             items = prv.get(self._data_key) or []
@@ -231,8 +231,8 @@ class QueryResult:
 
     def __repr__(self) -> str:
         return (
-            f"<QueryResult items={len(self.data)} has_more={self.has_more} has_prev={self.has_prev} "
-            f"offset={self.offset} next_cursor={self.next_cursor!r} prev_cursor={self.prev_cursor!r} limit={self.limit}>"
+            f"<QueryResult items={len(self.data)} hasMore={self.hasMore} hasPrev={self.hasPrev} "
+            f"offset={self.offset} paginationCursorNext={self.paginationCursorNext!r} paginationCursorPrev={self.paginationCursorPrev!r} limit={self.limit}>"
         )
 
 
@@ -257,9 +257,9 @@ def offset_query(fetch_page, *, start_offset=0, page_size=None, data_key="data")
         has_more = bool(page_size is not None and received == page_size)
         return page, has_more
 
-    has_more = bool(page_size is not None and received == page_size)
+    hasMore = bool(page_size is not None and received == page_size)
     return QueryResult(
-        first, data_key=data_key, fetch_next=fetch_next, has_more=has_more
+        first, data_key=data_key, fetch_next=fetch_next, hasMore=hasMore
     )
 
 
@@ -313,10 +313,10 @@ def cursor_query(
         data_key=data_key,
         fetch_next=fetch_next,
         fetch_prev=fetch_prev,
-        has_more=has_more_first,
-        has_prev=has_prev_first,
-        next_cursor=first.get(next_cursor_key),
-        prev_cursor=first.get(prev_cursor_key),
+        hasMore=has_more_first,
+        hasPrev=has_prev_first,
+        paginationCursorNext=first.get(next_cursor_key),
+        paginationCursorPrev=first.get(prev_cursor_key),
         offset=None,
         limit=page_size,
     )

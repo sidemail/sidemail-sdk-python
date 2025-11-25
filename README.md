@@ -1,8 +1,12 @@
-# Sidemail Python library
+# Sidemail Python Library
 
-Official Python client for the Sidemail API.
+Official Sidemail.io Python SDK providing convenient access to the Sidemail API from Python applications.
 
----
+## Requirements
+
+- Python 3.8+
+- `httpx` (installed automatically)
+- Network access over HTTPS (system CA bundle)
 
 ## Installation
 
@@ -10,47 +14,44 @@ Official Python client for the Sidemail API.
 pip install sidemail
 ```
 
----
+## Usage
 
-## Send your first email
-
-```python
-from sidemail import Sidemail, SidemailAuthError, SidemailAPIError
-
-sm = Sidemail(api_key="your-api-key")  # or set SIDEMAIL_API_KEY (see below)
-
-try:
-	resp = sm.send_email(
-		toAddress="user@example.com",
-		fromAddress="you@example.com",
-		subject="Hello",
-		text="Hello from Sidemail Python",
-	)
-```
-
-Shortcut `send_email(...)` calls the Email API under the hood (`sm.email.send(...)`).
-
----
-
-## Requirements
-
-- Python 3.8+
-- `httpx` (installed automatically)
-- HTTPS (system CA bundle)
-
----
-
-## Authentication
-
-Pass the API key explicitly:
+Configure the client with your project's API key (find it in the Sidemail Dashboard after signup) and send an email.
 
 ```python
 from sidemail import Sidemail
+sm = Sidemail(api_key="xxxxx")  # or set SIDEMAIL_API_KEY env var
 
+resp = sm.send_email(
+  toAddress="user@email.com",
+  fromAddress="you@example.com",
+  fromName="Your App",
+  templateName="Welcome",
+  templateProps={"foo": "bar"},
+)
+```
+
+The response looks like:
+
+```json
+{
+  "id": "5e858953daf20f3aac50a3da",
+  "status": "queued"
+}
+```
+
+Shortcut `sm.send_email(...)` calls `sm.email.send(...)` under the hood.
+
+### Authentication
+
+Explicit key:
+
+```python
+from sidemail import Sidemail
 sm = Sidemail(api_key="your-api-key")
 ```
 
-…or via environment variable `SIDEMAIL_API_KEY`.
+Environment variable `SIDEMAIL_API_KEY`:
 
 PowerShell (Windows):
 
@@ -58,23 +59,20 @@ PowerShell (Windows):
 $env:SIDEMAIL_API_KEY = "your-api-key"
 ```
 
-macOS/Linux (bash/zsh):
+macOS/Linux:
 
 ```bash
 export SIDEMAIL_API_KEY=your-api-key
 ```
 
-Then:
+Then simply:
 
 ```python
 from sidemail import Sidemail
-
-sm = Sidemail()  # uses SIDEMAIL_API_KEY
+sm = Sidemail()  # reads SIDEMAIL_API_KEY
 ```
 
----
-
-## Client configuration
+### Client configuration
 
 ```python
 import httpx
@@ -82,35 +80,23 @@ from sidemail import Sidemail
 
 sm = Sidemail(
 	api_key="your-api-key",
-	base_url="https://api.sidemail.io/v1",  # override for testing
-	timeout=10.0,                             # per-request timeout (seconds)
-	session=httpx.Client(),                   # custom httpx.Client (proxies, retries, etc.)
+	base_url="https://api.sidemail.io/v1",  # override for testing/mocking
+	timeout=10.0,                            # per-request timeout (seconds)
+	session=httpx.Client(),                  # custom httpx.Client (proxies, retries, etc.)
 )
 ```
 
-Notes:
+### Errors
 
-- `session` lets you reuse a configured `httpx.Client` (proxies, transport settings, connection pooling).
-- `timeout` applies per request.
+All SDK exceptions inherit from `SidemailError`.
 
----
-
-## Errors
-
-All SDK errors inherit from `SidemailError`.
-
-Specific types:
-
-- `SidemailAuthError` – HTTP 401/403 (invalid key or insufficient permissions)
-- `SidemailAPIError` – Other non-2xx responses; has `.status` and `.payload`
-
-Example:
+- `SidemailAuthError`: 401/403 (invalid key / permissions)
+- `SidemailAPIError`: Non-2xx API responses; has `.status` and `.payload`
 
 ```python
 from sidemail import Sidemail, SidemailError, SidemailAuthError, SidemailAPIError
 
 sm = Sidemail(api_key="your-api-key")
-
 try:
 	sm.send_email(
 		toAddress="user@example.com",
@@ -119,111 +105,120 @@ try:
 		text="Hello",
 	)
 except SidemailAuthError:
-	# invalid key / permissions
-	...
+	...  # handle auth error
 except SidemailAPIError as e:
-	# API error with JSON body
-	print(e.status)
-	print(e.payload)
+	print(e.status, e.payload)
 except SidemailError:
-	# network or other SDK error
-	...
+	...  # network / other
 ```
 
----
+### Response objects
 
-## Response objects
-
-Most methods return a dict-like object with attribute access (called `Resource`).
+Most responses are wrapped in a `Resource` enabling attribute access while remaining dict-like.
 
 ```python
 email = sm.email.get("email-id")
-
-# attribute access
-print(email.id)
-print(email.status)
-
-# dict-style access
-print(email["id"])
-
-# nested structures work the same way
-
-# original JSON payload
-raw = email.raw           # Mapping[str, Any]
-
-# fully unwrapped Python dict
-flat = email.to_dict()    # dict
+print(email.id, email.status)
+print(email["id"])          # dict-style
+raw_json = email.raw         # original JSON mapping
+flat_dict = email.to_dict()  # fully unwrapped dict
 ```
 
-If a field name isn’t a valid Python identifier (e.g., contains a dash) or collides with a keyword, it’s exposed with a trailing underscore (e.g., `class` → `resource.class_`).
+Field names that collide with Python keywords or are invalid identifiers are suffixed with `_`.
 
----
+## Auto-pagination
 
-## Pagination
-
-List/search methods return a `QueryResult` with the first page in `result.data`.
-
-Common properties:
+List/search methods return a `QueryResult` containing the first page in `result.data`. Iterate across all pages with `auto_paging()`.
 
 ```python
-result = sm.email.search(
-	query={"status": "delivered"},
-	limit=50,
-)
+result = sm.contacts.list(limit=50)
 
-result.data        # items on the first page
-result.total       # total count, if provided by the API
-result.limit       # page size (if provided)
-result.offset      # offset (for offset-based endpoints)
-result.has_more    # whether more pages are available
-result.next_cursor # cursor (for cursor-based endpoints)
-result.prev_cursor # cursor (for cursor-based endpoints)
+for contact in result.auto_paging():
+	print(contact.emailAddress)
 ```
 
-Iterate over all pages automatically:
+Callback-style iteration can be created easily with a helper (not built-in); use the for-loop above.
+
+Supported auto-paging methods:
+
+- `sm.contacts.list()`
+- `sm.contacts.query()`
+- `sm.email.search()`
+- `sm.messenger.list()`
+
+## Email Sending Examples
+
+### Password reset template
 
 ```python
-for email in result.auto_paging():
-	print(email["id"], email.get("status"))
-```
-
-If you only need the first page, use `result.data`.
-
----
-
-## Email API
-
-Entry point: `sm.email`
-
-Shortcut: `sm.send_email(...)`
-
-### Send email
-
-```python
-resp = sm.send_email(
-	toAddress="user@example.com",
+sm.send_email(
+	toAddress="user@email.com",
 	fromAddress="you@example.com",
 	fromName="Your App",
-	subject="Welcome",
-	text="Welcome to our app.",
-	# html="<strong>Welcome</strong>",
-	# templateName="WelcomeTemplate",
-	# attachments=[...],
+	templateName="Password reset",
+	templateProps={"resetUrl": "https://your.app/reset?token=123"},
 )
 ```
 
-Equivalent low-level call:
+### Schedule email delivery
 
 ```python
-resp = sm.email.send(
-	toAddress="user@example.com",
-	fromAddress="you@example.com",
-	subject="Welcome",
-	text="Welcome to our app.",
+import datetime
+
+scheduled_iso = (datetime.datetime.utcnow() + datetime.timedelta(minutes=60)).isoformat() + "Z"
+sm.send_email(
+	toAddress="user@email.com",
+	fromAddress="your@startup.com",
+	fromName="Startup name",
+	templateName="Welcome",
+	templateProps={"firstName": "Patrik"},
+	scheduledAt=scheduled_iso,
 )
 ```
 
-### Attachments
+### Template with dynamic list
+
+```python
+sm.send_email(
+	toAddress="user@email.com",
+	fromAddress="your@startup.com",
+	fromName="Startup name",
+	templateName="Template with dynamic list",
+	templateProps={
+		"list": [
+			{"text": "Dynamic list"},
+			{"text": "allows you to generate email template content"},
+			{"text": "based on template props."},
+		]
+	},
+)
+```
+
+### Custom HTML email
+
+```python
+sm.send_email(
+	toAddress="user@email.com",
+	fromAddress="your@startup.com",
+	fromName="Startup name",
+	subject="Testing html only custom emails :)",
+	html="<html><body><h1>Hello world! 👋</h1></body></html>",
+)
+```
+
+### Custom plain text email
+
+```python
+sm.send_email(
+	toAddress="user@email.com",
+	fromAddress="your@startup.com",
+	fromName="Startup name",
+	subject="Testing plain-text only custom emails :)",
+	text="Hello world! 👋",
+)
+```
+
+### Attachments helper
 
 ```python
 from sidemail import Sidemail
@@ -232,7 +227,7 @@ with open("invoice.pdf", "rb") as f:
 	attachment = Sidemail.file_to_attachment("invoice.pdf", f.read())
 
 sm.send_email(
-	toAddress="user@example.com",
+	toAddress="user@email.com",
 	fromAddress="you@example.com",
 	subject="Invoice",
 	text="Invoice attached.",
@@ -240,224 +235,177 @@ sm.send_email(
 )
 ```
 
-### Get email
-
-```python
-email = sm.email.get("email-id")
-print(email.id, email.status, email.createdAt)
-```
-
-### Delete email
-
-```python
-resp = sm.email.delete("id")
-```
+## Email Methods
 
 ### Search emails
+
+Paginated (supports auto-pagination).
 
 ```python
 result = sm.email.search(
 	query={
+		"toAddress": "john.doe@example.com",
 		"status": "delivered",
-		"toAddress": "user@example.com",
+		"templateProps": {"foo": "bar"},
 	},
-	limit=100,
+	limit=50,
 )
 
+print("First page count:", len(result.data))
 for email in result.auto_paging():
-	print(email["id"], email.get("status"))
+	print(email.id, email.status)
 ```
 
----
+### Retrieve a specific email
 
-## Contacts API
+```python
+email = sm.email.get("SIDEMAIL_EMAIL_ID")
+print("Email status:", email.status)
+```
 
-Entry point: `sm.contacts`
+### Delete a scheduled email
 
-### Create or update contact
+Only scheduled (future) emails can be deleted.
+
+```python
+resp = sm.email.delete("SIDEMAIL_EMAIL_ID")
+print("Deleted:", getattr(resp, "deleted", resp))
+```
+
+## Contact Methods
+
+### Create or update a contact
 
 ```python
 contact = sm.contacts.create_or_update(
-	email="user@example.com",
-	firstName="Jane",
-	lastName="Doe",
+	emailAddress="marry@lightning.com",
+	identifier="123",
 	customProps={
-		"plan": "pro",
+		"name": "Marry Lightning",
+		# ... more props ...
 	},
 )
+print("Contact status:", contact.status)
 ```
 
-### Find contact
+### Find a contact
 
 ```python
-contact = sm.contacts.find("user@example.com")
-if contact is not None:
-	print(contact.email)
+contact = sm.contacts.find("marry@lightning.com")
+if contact:
+	print("Found contact:", contact.emailAddress)
 ```
 
-### Query contacts
-
-```python
-result = sm.contacts.query(
-	limit=100,
-	query={
-		"customProps.plan": "pro",
-	},
-)
-
-for contact in result.auto_paging():
-	print(contact["email"])
-```
-
-### List contacts
+### List all contacts
 
 ```python
 result = sm.contacts.list(limit=50)
-
-for contact in result.auto_paging():
-	print(contact["email"])
+print("Has more:", result.hasMore)
+for c in result.auto_paging():
+	print(c.emailAddress)
 ```
 
-### Delete contact
+### Query contacts (filtering)
 
 ```python
-resp = sm.contacts.delete("user@example.com")
+result = sm.contacts.query(limit=100, query={"customProps.plan": "pro"})
+for c in result.auto_paging():
+	print(c.emailAddress)
 ```
 
----
-
-## Messenger API
-
-Entry point: `sm.messenger`
-
-### List messengers
+### Delete a contact
 
 ```python
-result = sm.messenger.list(limit=20, offset=0)
-
-for messenger in result.auto_paging():
-	print(messenger.get("id"), messenger.get("name"))
+resp = sm.contacts.delete("marry@lightning.com")
+print(resp)
 ```
 
-### Get messenger
+## Project Methods
+
+Linked projects are associated with the parent project of the API key used to initialize `Sidemail`. After creation, update the design to personalize templates.
+
+### Create a linked project
 
 ```python
-messenger = sm.messenger.get("messenger-id")
-print(messenger.id, messenger.get("name"))
+project = sm.project.create(name="Customer X linked project")
+# Save project.apiKey from response if provided for later use
 ```
 
-### Create messenger
+### Update a linked project
 
 ```python
-new = sm.messenger.create(
-	subject="My Messenger",
-	markdown="This is a broadcast-type email to many subscribers...",
-	# other fields as supported by the API
-)
+updated = sm.project.update(data={
+	"name": "New name",
+	"emailTemplateDesign": {
+		"logo": {
+			"sizeWidth": 50,
+			"href": "https://example.com",
+			"file": "PHN2ZyBjbGlwLXJ1bGU9ImV2ZW5vZGQiIGZpbGwtcnVsZT0iZXZlbm9kZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLW1pdGVybGltaXQ9IjIiIHZpZXdCb3g9IjAgMCAyNCAyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJtMTIgNS43MmMtMi42MjQtNC41MTctMTAtMy4xOTgtMTAgMi40NjEgMCAzLjcyNSA0LjM0NSA3LjcyNyA5LjMwMyAxMi41NC4xOTQuMTg5LjQ0Ni4yODMuNjk3LjI4M3MuNTAzLS4wOTQuNjk3LS4yODNjNC45NzctNC44MzEgOS4zMDMtOC44MTQgOS4zMDMtMTIuNTQgMC01LjY3OC03LjM5Ni02Ljk0NC0xMC0yLjQ2MXoiIGZpbGwtcnVsZT0ibm9uemVybyIvPjwvc3ZnPg==",
+		},
+		"font": {"name": "Acme"},
+		"colors": {"highlight": "#0000FF", "isDarkModeEnabled": True},
+		"unsubscribeText": "Darse de baja",
+		"footerTextTransactional": "You're receiving these emails because you registered for Acme Inc.",
+	},
+})
 ```
 
-### Update messenger
-
-```python
-updated = sm.messenger.update(
-	"messenger-id",
-	name="Updated name",
-)
-```
-
-### Delete messenger
-
-```python
-resp = sm.messenger.delete("messenger-id")
-```
-
----
-
-## Domains API
-
-Entry point: `sm.domains`
-
-### List domains
-
-```python
-domains = sm.domains.list()
-
-# Many responses include an array under "domains"
-items = domains.domains if hasattr(domains, "domains") else domains.get("domains", [])
-for d in items:
-	print(d.get("id"), d.get("name"))
-```
-
-### Create domain
-
-```python
-domain = sm.domains.create(name="example.com")
-```
-
-### Delete domain
-
-```python
-resp = sm.domains.delete("domain-id")
-```
-
----
-
-## Project API
-
-Entry point: `sm.project`
-
-### Create project
-
-```python
-project = sm.project.create(name="My Project")
-```
-
-### Get project
+### Get a project
 
 ```python
 project = sm.project.get()
 print(project.id, project.name)
 ```
 
-### Update project
-
-```python
-updated = sm.project.update(data={
-	"name": "Updated project name",
-})
-```
-
-### Delete project
+### Delete a linked project
 
 ```python
 resp = sm.project.delete()
+print(resp)
 ```
 
----
+## Additional APIs
 
-## Attachments helper
+These APIs extend beyond what is shown in the Node.js README but are available in the Python SDK.
 
-Use `Sidemail.file_to_attachment(name, data: bytes)` to prepare an attachment object:
+### Messenger API
 
 ```python
-from sidemail import Sidemail
+result = sm.messenger.list(limit=20)
+for m in result.auto_paging():
+	print(m.id, m.get("name"))
 
-with open("report.csv", "rb") as f:
-	att = Sidemail.file_to_attachment("report.csv", f.read())
-
-sm.send_email(
-	toAddress="user@example.com",
-	fromAddress="you@example.com",
-	subject="Report",
-	text="See attached.",
-	attachments=[att],
-)
+messenger = sm.messenger.get("messenger-id")
+created = sm.messenger.create(subject="My Messenger", markdown="Broadcast message...")
+updated = sm.messenger.update("messenger-id", name="Updated name")
+deleted = sm.messenger.delete("messenger-id")
 ```
 
----
+### Domains API
+
+```python
+domains = sm.domains.list()
+domain = sm.domains.create(name="example.com")
+deleted = sm.domains.delete("domain-id")
+```
+
+## Pagination Details
+
+Example inspecting cursors and paging manually:
+
+```python
+result = sm.email.search(query={"status": "queued"}, limit=25)
+print(result.hasMore, result.paginationCursorNext)
+first_ids = [e.id for e in result.data]
+```
 
 ## Notes
 
-- All methods return plain Python structures (dicts/lists) wrapped with attribute access for convenience.
-- If you need the exact original JSON, use `.raw`; for a standard nested dict, use `.to_dict()`.
-- For testing against a mock server, set `base_url` when creating the client.
+- Methods return `Resource` wrappers (attribute + dict access); unwrap via `.to_dict()`.
+- Original JSON available via `.raw`.
+
+## More Info
+
+- API docs: https://sidemail.io/docs/
+- Discover all API parameters: https://sidemail.io/docs/send-transactional-emails#discover-all-available-api-parameters
+- API errors & codes: https://sidemail.io/docs/send-transactional-emails#api-errors

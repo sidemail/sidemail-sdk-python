@@ -210,7 +210,7 @@ def test_cursor_query_basic():
 
     qr = cursor_query(fetch_page, page_size=2)
     assert qr.data == [1, 2]
-    assert qr.has_more is True
+    assert qr.hasMore is True
 
     items = list(qr.auto_paging())
     assert items == [1, 2, 3, 4]
@@ -556,7 +556,7 @@ def test_query_result_iter_first_page_and_repr():
         first_page,
         data_key="data",
         fetch_next=lambda: (None, False),
-        has_more=False,
+        hasMore=False,
     )
 
     # __iter__
@@ -568,7 +568,7 @@ def test_query_result_iter_first_page_and_repr():
     # __repr__ (just smoke-test the formatting)
     rep = repr(qr)
     assert "items=2" in rep
-    assert "has_more=False" in rep
+    assert "hasMore=False" in rep
 
 
 def test_offset_query_fetch_next_early_stop_branch():
@@ -586,8 +586,8 @@ def test_offset_query_fetch_next_early_stop_branch():
 
     qr = offset_query(fetch_page, start_offset=0, page_size=2, data_key="data")
 
-    # has_more is False, because first page < page_size
-    assert qr.has_more is False
+    # hasMore is False, because first page < page_size
+    assert qr.hasMore is False
 
     nxt, more = qr._fetch_next()  # exercise the early-return branch
     assert nxt is None
@@ -653,7 +653,7 @@ def test_cursor_query_prev_iteration_uses_prev_cursor():
 
     # First page is from prev_cursor="p2"
     assert qr.data == [3, 4]
-    assert qr.has_prev is True
+    assert qr.hasPrev is True
 
     # Now walk backwards using auto_paging_prev, which
     # will hit the fetch_prev branch and iterate items from "p1".
@@ -741,8 +741,8 @@ def test_cursor_query_prev_without_cursor_returns_none():
 
     qr = cursor_query(fetch_page, page_size=2)
 
-    # has_prev is True, but internal prev_cur is None
-    assert qr.has_prev is True
+    # hasPrev is True, but internal prev_cur is None
+    assert qr.hasPrev is True
 
     # This will call the inner fetch_prev, which hits:
     #   if not prev_cur: return None, False  (line 340)
@@ -763,8 +763,8 @@ def test_query_result_auto_paging_prev_empty_items():
         data_key="data",
         fetch_next=None,
         fetch_prev=fetch_prev,
-        has_more=False,
-        has_prev=True,
+        hasMore=False,
+        hasPrev=True,
     )
 
     # This will:
