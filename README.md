@@ -1,12 +1,10 @@
 # Sidemail Python Library
 
-Official Sidemail.io Python SDK providing convenient access to the Sidemail API from Python applications.
+Official Sidemail.io Python library providing convenient access to the Sidemail API from Python applications.
 
 ## Requirements
 
 - Python 3.8+
-- `httpx` (installed automatically)
-- Network access over HTTPS (system CA bundle)
 
 ## Installation
 
@@ -16,11 +14,11 @@ pip install sidemail
 
 ## Usage
 
-Configure the client with your project's API key (find it in the Sidemail Dashboard after signup) and send an email.
+First, the package needs to be configured with your project's API key, which you can find in the [Sidemail Dashboard](https://client.sidemail.io/) after you signed up.
 
 ```python
 from sidemail import Sidemail
-sm = Sidemail(api_key="xxxxx")  # or set SIDEMAIL_API_KEY env var
+sm = Sidemail(api_key="xxxxx") # or set SIDEMAIL_API_KEY env var
 
 resp = sm.send_email(
   toAddress="user@email.com",
@@ -29,6 +27,8 @@ resp = sm.send_email(
   templateName="Welcome",
   templateProps={"foo": "bar"},
 )
+
+print(f"Email sent! ID: {resp.id}")
 ```
 
 The response looks like:
@@ -51,25 +51,11 @@ from sidemail import Sidemail
 sm = Sidemail(api_key="your-api-key")
 ```
 
-Environment variable `SIDEMAIL_API_KEY`:
-
-PowerShell (Windows):
-
-```powershell
-$env:SIDEMAIL_API_KEY = "your-api-key"
-```
-
-macOS/Linux:
-
-```bash
-export SIDEMAIL_API_KEY=your-api-key
-```
-
-Then simply:
+Or if you set environment variable `SIDEMAIL_API_KEY`, then simply:
 
 ```python
 from sidemail import Sidemail
-sm = Sidemail()  # reads SIDEMAIL_API_KEY
+sm = Sidemail() # reads SIDEMAIL_API_KEY
 ```
 
 ### Client configuration
@@ -80,71 +66,11 @@ from sidemail import Sidemail
 
 sm = Sidemail(
 	api_key="your-api-key",
-	base_url="https://api.sidemail.io/v1",  # override for testing/mocking
-	timeout=10.0,                            # per-request timeout (seconds)
-	session=httpx.Client(),                  # custom httpx.Client (proxies, retries, etc.)
+	base_url="https://api.sidemail.io/v1", # override for testing/mocking
+	timeout=10.0,  # per-request timeout (seconds)
+	session=httpx.Client(), # custom httpx.Client (proxies, retries, etc.)
 )
 ```
-
-### Errors
-
-All SDK exceptions inherit from `SidemailError`.
-
-- `SidemailAuthError`: 401/403 (invalid key / permissions)
-- `SidemailAPIError`: Non-2xx API responses; has `.status` and `.payload`
-
-```python
-from sidemail import Sidemail, SidemailError, SidemailAuthError, SidemailAPIError
-
-sm = Sidemail(api_key="your-api-key")
-try:
-	sm.send_email(
-		toAddress="user@example.com",
-		fromAddress="you@example.com",
-		subject="Hello",
-		text="Hello",
-	)
-except SidemailAuthError:
-	...  # handle auth error
-except SidemailAPIError as e:
-	print(e.status, e.payload)
-except SidemailError:
-	...  # network / other
-```
-
-### Response objects
-
-Most responses are wrapped in a `Resource` enabling attribute access while remaining dict-like.
-
-```python
-email = sm.email.get("email-id")
-print(email.id, email.status)
-print(email["id"])          # dict-style
-raw_json = email.raw         # original JSON mapping
-flat_dict = email.to_dict()  # fully unwrapped dict
-```
-
-Field names that collide with Python keywords or are invalid identifiers are suffixed with `_`.
-
-## Auto-pagination
-
-List/search methods return a `QueryResult` containing the first page in `result.data`. Iterate across all pages with `auto_paging()`.
-
-```python
-result = sm.contacts.list(limit=50)
-
-for contact in result.auto_paging():
-	print(contact.emailAddress)
-```
-
-Callback-style iteration can be created easily with a helper (not built-in); use the for-loop above.
-
-Supported auto-paging methods:
-
-- `sm.contacts.list()`
-- `sm.contacts.query()`
-- `sm.email.search()`
-- `sm.messenger.list()`
 
 ## Email Sending Examples
 
@@ -218,7 +144,49 @@ sm.send_email(
 )
 ```
 
-### Attachments helper
+## Error handling
+
+All SDK exceptions inherit from `SidemailError`.
+
+- `SidemailAuthError`: 401/403 (invalid key / permissions)
+- `SidemailAPIError`: Non-2xx API responses; has `.status` and `.payload`
+
+```python
+from sidemail import Sidemail, SidemailError, SidemailAuthError, SidemailAPIError
+
+sm = Sidemail(api_key="your-api-key")
+try:
+	sm.send_email(
+		toAddress="user@example.com",
+		fromAddress="you@example.com",
+		subject="Hello",
+		text="Hello",
+	)
+except SidemailAuthError:
+	...  # handle auth error
+except SidemailAPIError as e:
+	print(e.status, e.payload)
+except SidemailError:
+	...  # network / other
+```
+
+## Response objects
+
+Most responses are wrapped in a `Resource` enabling attribute access while remaining dict-like.
+
+- Field names that collide with Python keywords or are invalid identifiers are suffixed with `_`.
+- Methods return `Resource` wrappers (attribute + dict access); unwrap via `.to_dict()`.
+- Original JSON available via `.raw`.
+
+```python
+email = sm.email.get("email-id")
+print(email.id, email.status)
+print(email["id"])          # dict-style
+raw_json = email.raw         # original JSON mapping
+flat_dict = email.to_dict()  # fully unwrapped dict
+```
+
+## Attachments helper
 
 ```python
 from sidemail import Sidemail
@@ -234,6 +202,26 @@ sm.send_email(
 	attachments=[attachment],
 )
 ```
+
+## Auto-pagination
+
+List/search methods return a `QueryResult` containing the first page in `result.data`. Iterate across all pages with `auto_paging()`.
+
+```python
+result = sm.contacts.list(limit=50)
+
+for contact in result.auto_paging():
+	print(contact.emailAddress)
+```
+
+Callback-style iteration can be created easily with a helper (not built-in); use the for-loop above.
+
+Supported auto-paging methods:
+
+- `sm.contacts.list()`
+- `sm.contacts.query()`
+- `sm.email.search()`
+- `sm.messenger.list()`
 
 ## Email Methods
 
@@ -328,15 +316,15 @@ Linked projects are associated with the parent project of the API key used to in
 
 ```python
 project = sm.project.create(name="Customer X linked project")
-# Save project.apiKey from response if provided for later use
+# Important! Save project.apiKey for later use
 ```
 
 ### Update a linked project
 
 ```python
-updated = sm.project.update(data={
-	"name": "New name",
-	"emailTemplateDesign": {
+updated = sm.project.update(
+	name="New name",
+	emailTemplateDesign={
 		"logo": {
 			"sizeWidth": 50,
 			"href": "https://example.com",
@@ -347,7 +335,7 @@ updated = sm.project.update(data={
 		"unsubscribeText": "Darse de baja",
 		"footerTextTransactional": "You're receiving these emails because you registered for Acme Inc.",
 	},
-})
+)
 ```
 
 ### Get a project
@@ -364,11 +352,7 @@ resp = sm.project.delete()
 print(resp)
 ```
 
-## Additional APIs
-
-These APIs extend beyond what is shown in the Node.js README but are available in the Python SDK.
-
-### Messenger API
+### Messenger API (newsletters)
 
 ```python
 result = sm.messenger.list(limit=20)
@@ -381,7 +365,7 @@ updated = sm.messenger.update("messenger-id", name="Updated name")
 deleted = sm.messenger.delete("messenger-id")
 ```
 
-### Domains API
+### Sending domains API
 
 ```python
 domains = sm.domains.list()
@@ -389,23 +373,6 @@ domain = sm.domains.create(name="example.com")
 deleted = sm.domains.delete("domain-id")
 ```
 
-## Pagination Details
-
-Example inspecting cursors and paging manually:
-
-```python
-result = sm.email.search(query={"status": "queued"}, limit=25)
-print(result.hasMore, result.paginationCursorNext)
-first_ids = [e.id for e in result.data]
-```
-
-## Notes
-
-- Methods return `Resource` wrappers (attribute + dict access); unwrap via `.to_dict()`.
-- Original JSON available via `.raw`.
-
 ## More Info
 
-- API docs: https://sidemail.io/docs/
-- Discover all API parameters: https://sidemail.io/docs/send-transactional-emails#discover-all-available-api-parameters
-- API errors & codes: https://sidemail.io/docs/send-transactional-emails#api-errors
+Visit [Sidemail docs](https://sidemail.io/docs/) for more information.

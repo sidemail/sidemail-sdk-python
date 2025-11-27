@@ -9,6 +9,12 @@ from dataclasses import dataclass
 from typing import Any, Dict, Iterator, Mapping, Optional, List, Tuple
 from urllib.parse import quote as url_quote
 
+try:
+    from importlib.metadata import version as get_version
+    __version__ = get_version("sidemail")
+except Exception:
+    __version__ = "unknown"
+
 API_ROOT = "https://api.sidemail.io/v1"
 
 
@@ -34,7 +40,7 @@ class _Config:
     api_key: str
     base_url: str = API_ROOT
     timeout: float = 10.0
-    user_agent: str = "sidemail-sdk-python/0.1.0"
+    user_agent: str = f"sidemail-sdk-python/{__version__}"
 
 
 def _headers(cfg: _Config) -> Dict[str, str]:
@@ -524,11 +530,11 @@ class _ProjectAPI:
         )
         return _handle(resp)
 
-    def update(self, *, data: Mapping[str, Any]) -> Dict[str, Any]:
+    def update(self, **params) -> Dict[str, Any]:
         resp = self._http.patch(
             f"{self._cfg.base_url}/project",
             headers=_headers(self._cfg),
-            json=dict(data),
+            json=dict(params),
             timeout=self._cfg.timeout,
         )
         return _handle(resp)

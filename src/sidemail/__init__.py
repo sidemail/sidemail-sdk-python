@@ -1,4 +1,3 @@
-from .client import Sidemail, SidemailError, SidemailAuthError, SidemailAPIError
+from .client import Sidemail, SidemailError, SidemailAuthError, SidemailAPIError, __version__
 
-__all__ = ["Sidemail", "SidemailError", "SidemailAuthError", "SidemailAPIError"]
-__version__ = "0.1.0"
+__all__ = ["Sidemail", "SidemailError", "SidemailAuthError", "SidemailAPIError", "__version__"]
