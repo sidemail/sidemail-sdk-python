@@ -13,6 +13,9 @@ authors = [{ name = "Sidemail.io Development Team" }]
 dependencies = ["httpx>=0.24.0"]
 keywords = ["sidemail", "email", "api", "client"]
 
+[project.optional-dependencies]
+dev = ["pytest"]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 

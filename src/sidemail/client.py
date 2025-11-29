@@ -19,20 +19,21 @@ API_ROOT = "https://api.sidemail.io/v1"
 
 
 class SidemailError(Exception):
-    pass
+    """Base exception for all Sidemail errors."""
 
-
-class SidemailAuthError(SidemailError):
-    pass
-
-
-class SidemailAPIError(SidemailError):
-    def __init__(self, status: int, payload: Optional[Mapping[str, Any]] = None):
-        self.status = status
-        self.payload = dict(payload or {})
-        super().__init__(
-            f"HTTP {status}: {self.payload.get('developerMessage') or 'API error'}"
-        )
+    def __init__(
+        self,
+        message: str,
+        *,
+        httpStatus: Optional[int] = None,
+        errorCode: Optional[str] = None,
+        moreInfo: Optional[str] = None,
+    ):
+        super().__init__(message)
+        self.message = message
+        self.httpStatus = httpStatus
+        self.errorCode = errorCode
+        self.moreInfo = moreInfo
 
 
 @dataclass
@@ -64,9 +65,13 @@ def _handle(resp: httpx.Response) -> Any:
         payload = resp.json()
     except Exception:
         payload = {"developerMessage": resp.text or "Unknown error"}
-    if resp.status_code in (401, 403):
-        raise SidemailAuthError(payload.get("developerMessage") or "Unauthorized")
-    raise SidemailAPIError(resp.status_code, payload)
+    msg = payload.get("developerMessage") or f"HTTP {resp.status_code}"
+    raise SidemailError(
+        msg,
+        httpStatus=resp.status_code,
+        errorCode=payload.get("errorCode"),
+        moreInfo=payload.get("moreInfo"),
+    )
 
 
 def _safe_attr(name: str) -> str:
@@ -208,7 +213,7 @@ class QueryResult:
     def __iter__(self) -> Iterator[Dict[str, Any]]:
         return iter(self.data)
 
-    def auto_paging(self) -> Iterator[Dict[str, Any]]:
+    def auto_paginate(self) -> Iterator[Dict[str, Any]]:
         for item in self.data:
             yield item
         while self.hasMore and self._fetch_next:
@@ -221,7 +226,7 @@ class QueryResult:
             for it in items:
                 yield it
 
-    def auto_paging_prev(self) -> Iterator[Dict[str, Any]]:
+    def auto_paginate_prev(self) -> Iterator[Dict[str, Any]]:
         while self.hasPrev and self._fetch_prev:
             prv, self.hasPrev = self._fetch_prev()
             if not isinstance(prv, Mapping):

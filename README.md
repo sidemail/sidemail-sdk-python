@@ -146,13 +146,10 @@ sm.send_email(
 
 ## Error handling
 
-All SDK exceptions inherit from `SidemailError`.
-
-- `SidemailAuthError`: 401/403 (invalid key / permissions)
-- `SidemailAPIError`: Non-2xx API responses; has `.status` and `.payload`
+The SDK throws `SidemailError` for all errors. API errors include `message`, `httpStatus`, `errorCode`, and `moreInfo`.
 
 ```python
-from sidemail import Sidemail, SidemailError, SidemailAuthError, SidemailAPIError
+from sidemail import Sidemail, SidemailError
 
 sm = Sidemail(api_key="your-api-key")
 try:
@@ -162,12 +159,10 @@ try:
 		subject="Hello",
 		text="Hello",
 	)
-except SidemailAuthError:
-	...  # handle auth error
-except SidemailAPIError as e:
-	print(e.status, e.payload)
-except SidemailError:
-	...  # network / other
+except SidemailError as e:
+	print(e.message)
+	if e.httpStatus:  # API error
+		print(e.httpStatus, e.errorCode, e.moreInfo)
 ```
 
 ## Response objects
@@ -192,25 +187,25 @@ flat_dict = email.to_dict()  # fully unwrapped dict
 from sidemail import Sidemail
 
 with open("invoice.pdf", "rb") as f:
-	attachment = Sidemail.file_to_attachment("invoice.pdf", f.read())
+  attachment = Sidemail.file_to_attachment("invoice.pdf", f.read())
 
-sm.send_email(
-	toAddress="user@email.com",
-	fromAddress="you@example.com",
-	subject="Invoice",
-	text="Invoice attached.",
-	attachments=[attachment],
-)
+  sm.send_email(
+    toAddress="user@email.com",
+    fromAddress="you@example.com",
+    subject="Invoice",
+    text="Invoice attached.",
+    attachments=[attachment],
+  )
 ```
 
 ## Auto-pagination
 
-List/search methods return a `QueryResult` containing the first page in `result.data`. Iterate across all pages with `auto_paging()`.
+List/search methods return a `QueryResult` containing the first page in `result.data`. Iterate across all pages with `auto_paginate()`.
 
 ```python
 result = sm.contacts.list(limit=50)
 
-for contact in result.auto_paging():
+for contact in result.auto_paginate():
 	print(contact.emailAddress)
 ```
 
@@ -240,7 +235,7 @@ result = sm.email.search(
 )
 
 print("First page count:", len(result.data))
-for email in result.auto_paging():
+for email in result.auto_paginate():
 	print(email.id, email.status)
 ```
 
@@ -289,7 +284,7 @@ if contact:
 ```python
 result = sm.contacts.list(limit=50)
 print("Has more:", result.hasMore)
-for c in result.auto_paging():
+for c in result.auto_paginate():
 	print(c.emailAddress)
 ```
 
@@ -297,7 +292,7 @@ for c in result.auto_paging():
 
 ```python
 result = sm.contacts.query(limit=100, query={"customProps.plan": "pro"})
-for c in result.auto_paging():
+for c in result.auto_paginate():
 	print(c.emailAddress)
 ```
 
@@ -356,7 +351,7 @@ print(resp)
 
 ```python
 result = sm.messenger.list(limit=20)
-for m in result.auto_paging():
+for m in result.auto_paginate():
 	print(m.id, m.get("name"))
 
 messenger = sm.messenger.get("messenger-id")

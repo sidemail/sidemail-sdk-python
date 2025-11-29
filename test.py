@@ -6,8 +6,6 @@ import pytest
 from sidemail import (
     Sidemail,
     SidemailError,
-    SidemailAuthError,
-    SidemailAPIError,
 )
 
 from sidemail.client import (
@@ -131,29 +129,31 @@ def test_handle_success_text_fallback():
     assert result == "plain text"
 
 
-def test_handle_auth_error_raises_sidemail_auth_error():
+def test_handle_auth_error_raises_sidemail_error():
     resp = FakeResponse(
         status_code=401,
         json_data={"developerMessage": "Nope"},
         text="Nope",
         content=b"{}",
     )
-    with pytest.raises(SidemailAuthError) as exc:
+    with pytest.raises(SidemailError) as exc:
         _handle(resp)
     assert "Nope" in str(exc.value)
+    assert exc.value.httpStatus == 401
 
 
-def test_handle_api_error_raises_sidemail_api_error():
+def test_handle_api_error_raises_sidemail_error():
     resp = FakeResponse(
         status_code=500,
-        json_data={"developerMessage": "Internal error"},
+        json_data={"developerMessage": "Internal error", "errorCode": "INTERNAL", "moreInfo": "https://docs.example.com"},
         text="Internal error",
         content=b"{}",
     )
-    with pytest.raises(SidemailAPIError) as exc:
+    with pytest.raises(SidemailError) as exc:
         _handle(resp)
-    assert exc.value.status == 500
-    assert exc.value.payload["developerMessage"] == "Internal error"
+    assert exc.value.httpStatus == 500
+    assert exc.value.errorCode == "INTERNAL"
+    assert exc.value.moreInfo == "https://docs.example.com"
 
 
 # -------------------------
@@ -181,7 +181,7 @@ def test_offset_query_basic():
     assert isinstance(qr, QueryResult)
     assert qr.data == [1, 2, 3]
 
-    all_items = list(qr.auto_paging())
+    all_items = list(qr.auto_paginate())
     assert all_items == [1, 2, 3, 4, 5, 6]
 
 
@@ -212,7 +212,7 @@ def test_cursor_query_basic():
     assert qr.data == [1, 2]
     assert qr.hasMore is True
 
-    items = list(qr.auto_paging())
+    items = list(qr.auto_paginate())
     assert items == [1, 2, 3, 4]
 
     # hit the fallback branch so coverage doesn't treat it as dead
@@ -530,12 +530,12 @@ def test_handle_error_non_json_fallback_uses_text():
         content=b"",
     )
 
-    with pytest.raises(SidemailAPIError) as exc:
+    with pytest.raises(SidemailError) as exc:
         _handle(resp)
 
     err = exc.value
     assert "Server exploded" in str(err)
-    assert err.payload["developerMessage"] == "Server exploded"
+    assert err.httpStatus == 500
 
 
 # (Removed) camelize-related behavior is no longer part of the SDK
@@ -602,7 +602,7 @@ def test_offset_query_fetch_next_early_stop_branch():
 def test_cursor_query_handles_missing_next_cursor_gracefully():
     # has_more=True but no paginationCursorNext: triggers the
     # "if not next_cur: return None, False" path and the "not Mapping" branch
-    # in auto_paging.
+    # in auto_paginate.
     calls = {"count": 0}
 
     def fetch_page(next_cursor, prev_cursor, limit):
@@ -618,13 +618,13 @@ def test_cursor_query_handles_missing_next_cursor_gracefully():
 
     qr = cursor_query(fetch_page, page_size=1)
 
-    items = list(qr.auto_paging())
+    items = list(qr.auto_paginate())
     assert items == [1]
     assert calls["count"] == 1  # no second fetch, branch short-circuits
 
 
 def test_cursor_query_prev_iteration_uses_prev_cursor():
-    # Exercise auto_paging_prev and the full fetch_prev path.
+    # Exercise auto_paginate_prev and the full fetch_prev path.
     def fetch_page(next_cursor, prev_cursor, limit):
         if next_cursor is None and prev_cursor == "p2":
             # First "previous" page
@@ -655,9 +655,9 @@ def test_cursor_query_prev_iteration_uses_prev_cursor():
     assert qr.data == [3, 4]
     assert qr.hasPrev is True
 
-    # Now walk backwards using auto_paging_prev, which
+    # Now walk backwards using auto_paginate_prev, which
     # will hit the fetch_prev branch and iterate items from "p1".
-    prev_items = list(qr.auto_paging_prev())
+    prev_items = list(qr.auto_paginate_prev())
     assert prev_items == [1, 2]
 
 
@@ -746,14 +746,14 @@ def test_cursor_query_prev_without_cursor_returns_none():
 
     # This will call the inner fetch_prev, which hits:
     #   if not prev_cur: return None, False  (line 340)
-    # and then auto_paging_prev will see prv is not a Mapping,
+    # and then auto_paginate_prev will see prv is not a Mapping,
     # so it hits line 257 and returns.
-    items = list(qr.auto_paging_prev())
+    items = list(qr.auto_paginate_prev())
     assert items == []
     assert calls["count"] == 1
 
 
-def test_query_result_auto_paging_prev_empty_items():
+def test_query_result_auto_paginate_prev_empty_items():
     def fetch_prev():
         # Mapping but no "data" → items list is empty
         return {}, False
@@ -771,5 +771,5 @@ def test_query_result_auto_paging_prev_empty_items():
     # - call fetch_prev() → prv is {} (a Mapping), has_prev becomes False
     # - items = prv.get("data") or [] → []
     # - hit "if not items: return" (line 260)
-    items = list(qr.auto_paging_prev())
+    items = list(qr.auto_paginate_prev())
     assert items == []
